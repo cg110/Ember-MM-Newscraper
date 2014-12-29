@@ -47,6 +47,9 @@ Public Class TMDB_Trailer
     Private _ScraperEnabled As Boolean = False
     Private _setup As frmTMDBTrailerSettingsHolder
 
+    Private _scraper As Scraper
+    Private _scraperSettings As Scraper.sMySettings_ForScraper
+
 #End Region 'Fields
 
 #Region "Events"
@@ -139,6 +142,27 @@ Public Class TMDB_Trailer
         Return Spanel
     End Function
 
+    Function FetchScraper() As Scraper
+        LoadSettings()
+
+        If Not IsNothing(_scraper) And Not IsNothing(_scraperSettings) Then
+            If _scraperSettings.ApiKey = _MySettings.APIKey And
+                _scraperSettings.FallBackEng = _MySettings.FallBackEng And
+                _scraperSettings.PrefLanguage = _MySettings.PrefLanguage Then
+                Return _scraper
+            End If
+        End If
+
+        _scraperSettings = New Scraper.sMySettings_ForScraper
+        _scraperSettings.ApiKey = _MySettings.APIKey
+        _scraperSettings.FallBackEng = _MySettings.FallBackEng
+        _scraperSettings.PrefLanguage = _MySettings.PrefLanguage
+
+        _scraper = New TMDB.Scraper(_scraperSettings)
+
+        Return _scraper
+    End Function
+
     Sub LoadSettings()
 
         strPrivateAPIKey = clsAdvancedSettings.GetSetting("TMDBAPIKey", "")
@@ -152,20 +176,14 @@ Public Class TMDB_Trailer
     Function Scraper(ByRef DBMovie As Structures.DBMovie, ByVal Type As Enums.ScraperCapabilities, ByRef URLList As List(Of Trailers)) As Interfaces.ModuleResult Implements Interfaces.ScraperModule_Trailer_Movie.Scraper
         logger.Trace("Started scrape", New StackTrace().ToString())
 
-        LoadSettings()
+
         If String.IsNullOrEmpty(DBMovie.Movie.TMDBID) Then
             DBMovie.Movie.TMDBID = ModulesManager.Instance.GetMovieTMDBID(DBMovie.Movie.ID)
         End If
 
         If Not String.IsNullOrEmpty(DBMovie.Movie.TMDBID) Then
-            Dim Settings As TMDB.Scraper.sMySettings_ForScraper
-            Settings.ApiKey = _MySettings.APIKey
-            Settings.FallBackEng = _MySettings.FallBackEng
-            Settings.PrefLanguage = _MySettings.PrefLanguage
-
-            Dim _scraper As New TMDB.Scraper(Settings)
-
-            URLList = _scraper.GetTMDBTrailers(DBMovie.Movie.TMDBID)
+            Dim _localScraper = FetchScraper()
+            URLList = _localScraper.GetTMDBTrailers(DBMovie.Movie.TMDBID)
         End If
 
         logger.Trace("Finished scrape", New StackTrace().ToString())

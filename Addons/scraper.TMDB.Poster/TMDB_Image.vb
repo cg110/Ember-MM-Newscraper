@@ -52,6 +52,8 @@ Public Class TMDB_Image
     Private _setup_Movie As frmTMDBMediaSettingsHolder_Movie
     Private _setup_MovieSet As frmTMDBMediaSettingsHolder_MovieSet
 
+    Private _scraperMovie As TMDB.Scraper
+    Private _scraperMovieSettings As TMDB.Scraper.sMySettings_ForScraper
 #End Region 'Fields
 
 #Region "Events"
@@ -252,6 +254,31 @@ Public Class TMDB_Image
         Return Spanel
     End Function
 
+    Function FetchScraper_Movie() As TMDB.Scraper
+        LoadSettings_Movie()
+
+        If Not IsNothing(_scraperMovie) And Not IsNothing(_scraperMovieSettings) Then
+            If _scraperMovieSettings.APIKey = _MySettings_Movie.APIKey And
+                _scraperMovieSettings.GetBlankImages = _MySettings_Movie.GetBlankImages And
+                _scraperMovieSettings.GetEnglishImages = _MySettings_Movie.GetEnglishImages And
+                _scraperMovieSettings.PrefLanguage = _MySettings_Movie.PrefLanguage And
+                _scraperMovieSettings.PrefLanguageOnly = _MySettings_Movie.PrefLanguageOnly Then
+                Return _scraperMovie
+            End If
+        End If
+
+        _scraperMovieSettings = New TMDB.Scraper.sMySettings_ForScraper
+        _scraperMovieSettings.APIKey = _MySettings_Movie.APIKey
+        _scraperMovieSettings.GetBlankImages = _MySettings_Movie.GetBlankImages
+        _scraperMovieSettings.GetEnglishImages = _MySettings_Movie.GetEnglishImages
+        _scraperMovieSettings.PrefLanguage = _MySettings_Movie.PrefLanguage
+        _scraperMovieSettings.PrefLanguageOnly = _MySettings_Movie.PrefLanguageOnly
+
+        _scraperMovie = New TMDB.Scraper(_scraperMovieSettings)
+
+        Return _scraperMovie
+    End Function
+
     Sub LoadSettings_Movie()
 
         strPrivateAPIKey = clsAdvancedSettings.GetSetting("APIKey", "", , Enums.Content_Type.Movie)
@@ -283,23 +310,14 @@ Public Class TMDB_Image
     Function Scraper(ByRef DBMovie As Structures.DBMovie, ByVal Type As Enums.ScraperCapabilities, ByRef ImageList As List(Of MediaContainers.Image)) As Interfaces.ModuleResult Implements Interfaces.ScraperModule_Image_Movie.Scraper
         logger.Trace("Started scrape TMDB")
 
-        LoadSettings_Movie()
+        Dim _scraper = FetchScraper_Movie()
 
         If String.IsNullOrEmpty(DBMovie.Movie.TMDBID) Then
             DBMovie.Movie.TMDBID = ModulesManager.Instance.GetMovieTMDBID(DBMovie.Movie.ID)
         End If
 
         If Not String.IsNullOrEmpty(DBMovie.Movie.TMDBID) Then
-            Dim Settings As TMDB.Scraper.sMySettings_ForScraper
-            Settings.GetBlankImages = _MySettings_Movie.GetBlankImages
-            Settings.GetEnglishImages = _MySettings_Movie.GetEnglishImages
-            Settings.APIKey = _MySettings_Movie.APIKey
-            Settings.PrefLanguage = _MySettings_Movie.PrefLanguage
-            Settings.PrefLanguageOnly = _MySettings_Movie.PrefLanguageOnly
-
-            Dim _scraper As New TMDB.Scraper(Settings)
-
-            ImageList = _scraper.GetTMDBImages(DBMovie.Movie.TMDBID, Type, Settings)
+            ImageList = _scraper.GetTMDBImages(DBMovie.Movie.TMDBID, Type, _scraperMovieSettings)
         End If
 
         logger.Trace("Finished TMDB Scraper")

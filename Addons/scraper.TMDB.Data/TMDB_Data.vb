@@ -56,6 +56,9 @@ Public Class TMDB_Data
     Private _setup_Movie As frmTMDBInfoSettingsHolder_Movie
     Private _setup_MovieSet As frmTMDBInfoSettingsHolder_MovieSet
 
+    Private _scraperMovie As Scraper
+    Private _scraperMovieSettings As Scraper.sMySettings_ForScraper
+
 #End Region 'Fields
 
 #Region "Events"
@@ -240,6 +243,30 @@ Public Class TMDB_Data
         Return SPanel
     End Function
 
+
+    Function FetchScraper_Movie() As Scraper
+        LoadSettings_Movie()
+
+        If Not IsNothing(_scraperMovie) And Not IsNothing(_scraperMovieSettings) Then
+            If _scraperMovieSettings.ApiKey = _MySettings_Movie.APIKey And
+                _scraperMovieSettings.FallBackEng = _MySettings_Movie.FallBackEng And
+                _scraperMovieSettings.GetAdultItems = _MySettings_Movie.GetAdultItems And
+                _scraperMovieSettings.PrefLanguage = _MySettings_Movie.PrefLanguage Then
+                Return _scraperMovie
+            End If
+        End If
+
+        _scraperMovieSettings = New Scraper.sMySettings_ForScraper
+        _scraperMovieSettings.ApiKey = _MySettings_Movie.APIKey
+        _scraperMovieSettings.FallBackEng = _MySettings_Movie.FallBackEng
+        _scraperMovieSettings.GetAdultItems = _MySettings_Movie.GetAdultItems
+        _scraperMovieSettings.PrefLanguage = _MySettings_Movie.PrefLanguage
+
+        _scraperMovie = New TMDB.Scraper(_scraperMovieSettings)
+
+        Return _scraperMovie
+    End Function
+
     Sub LoadSettings_Movie()
         ConfigOptions_Movie.bCast = clsAdvancedSettings.GetBooleanSetting("DoCast", True, , Enums.Content_Type.Movie)
         ConfigOptions_Movie.bCert = clsAdvancedSettings.GetBooleanSetting("DoCert", True, , Enums.Content_Type.Movie)
@@ -395,16 +422,7 @@ Public Class TMDB_Data
 
     Function GetTMDBID(ByVal sIMDBID As String, ByRef sTMDBID As String) As Interfaces.ModuleResult Implements Interfaces.ScraperModule_Data_Movie.GetTMDBID
         If Not String.IsNullOrEmpty(sIMDBID) Then
-
-            LoadSettings_Movie()
-
-            Dim Settings As TMDB.Scraper.sMySettings_ForScraper
-            Settings.ApiKey = _MySettings_Movie.APIKey
-            Settings.FallBackEng = _MySettings_Movie.FallBackEng
-            Settings.GetAdultItems = _MySettings_Movie.GetAdultItems
-            Settings.PrefLanguage = _MySettings_Movie.PrefLanguage
-
-            Dim _scraper As New TMDB.Scraper(Settings)
+            Dim _scraper = FetchScraper_Movie()
 
             sTMDBID = _scraper.GetMovieID(sIMDBID)
         End If
@@ -441,15 +459,8 @@ Public Class TMDB_Data
     Function Scraper(ByRef oDBMovie As Structures.DBMovie, ByRef nMovie As MediaContainers.Movie, ByRef ScrapeType As Enums.ScrapeType, ByRef Options As Structures.ScrapeOptions_Movie) As Interfaces.ModuleResult Implements Interfaces.ScraperModule_Data_Movie.Scraper
         logger.Trace("Started TMDB Scraper")
 
-        LoadSettings_Movie()
+        Dim _scraper = FetchScraper_Movie()
 
-        Dim Settings As TMDB.Scraper.sMySettings_ForScraper
-        Settings.ApiKey = _MySettings_Movie.APIKey
-        Settings.FallBackEng = _MySettings_Movie.FallBackEng
-        Settings.GetAdultItems = _MySettings_Movie.GetAdultItems
-        Settings.PrefLanguage = _MySettings_Movie.PrefLanguage
-
-        Dim _scraper As New TMDB.Scraper(Settings)
         Dim filterOptions As Structures.ScrapeOptions_Movie = Functions.MovieScrapeOptionsAndAlso(Options, ConfigOptions_Movie)
 
         If Master.GlobalScrapeMod.NFO AndAlso Not Master.GlobalScrapeMod.DoSearch Then
@@ -479,7 +490,7 @@ Public Class TMDB_Data
 
         If ScrapeType = Enums.ScrapeType.SingleScrape OrElse ScrapeType = Enums.ScrapeType.SingleAuto Then
             If String.IsNullOrEmpty(oDBMovie.Movie.ID) AndAlso String.IsNullOrEmpty(oDBMovie.Movie.TMDBID) Then
-                Using dSearch As New dlgTMDBSearchResults_Movie(Settings, _scraper)
+                Using dSearch As New dlgTMDBSearchResults_Movie(_scraperMovieSettings, _scraper)
                     If dSearch.ShowDialog(nMovie, oDBMovie.Movie.Title, oDBMovie.Filename, filterOptions, 0) = Windows.Forms.DialogResult.OK Then
                         _scraper.GetMovieInfo(nMovie.TMDBID, nMovie, filterOptions.bFullCrew, False, filterOptions, False)
                         'if a movie is found, set DoSearch back to "false" for following scrapers
