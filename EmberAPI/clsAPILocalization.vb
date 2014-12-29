@@ -39,6 +39,8 @@ Public Class Localization
     Private Shared htStrings As New clsXMLLanguage
     Private Shared _ISOLanguages As New clsXMLLanguages
 
+    Private Shared _alpha2Lookup As New Dictionary(Of String, String)
+
     Private _all As String
     Private _disabled As String
     Private _none As String
@@ -73,6 +75,13 @@ Public Class Localization
                 logger.Fatal("Cannot load Language.xml." & vbNewLine & "Path: {0}", lPath)
                 MsgBox(String.Concat("Cannot load Language.xml.", vbNewLine, vbNewLine, "Path:", vbNewLine, lPath), MsgBoxStyle.Critical, "File Not Found")
             End If
+
+            _alpha2Lookup = New Dictionary(Of String, String)
+            For Each x As LanguagesLanguage In _ISOLanguages.Language
+                If Not IsNothing(x.Alpha2) Then
+                    _alpha2Lookup(x.Alpha2) = x.Name
+                End If
+            Next
         Else
             logger.Fatal("Cannot find Language.xml." & vbNewLine & "Expected path: {0}", lPath)
             MsgBox(String.Concat("Cannot find Language.xml.", vbNewLine, vbNewLine, "Expected path:", vbNewLine, lPath), MsgBoxStyle.Critical, "File Not Found")
@@ -117,7 +126,10 @@ Public Class Localization
     ' This are functions for country/Language codes under ISO639 Alpha-2 and Alpha-3(ie: Used by DVD/GoogleAPI)
     Shared Function ISOGetLangByCode2(ByVal code As String) As String
         Try
-            Return (From x As LanguagesLanguage In _ISOLanguages.Language Where (x.Alpha2 = code))(0).Name
+            If (_alpha2Lookup.ContainsKey(code)) Then
+                Return _alpha2Lookup(code)
+            End If
+            Return Master.eLang.GetString(1168, "Blank")
         Catch ex As Exception
             'logger.Error(New StackFrame().GetMethod().Name, ex)
             Return Master.eLang.GetString(1168, "Blank")
@@ -209,19 +221,23 @@ Public Class Localization
 
     Public Function GetString(ByVal ID As Integer, ByVal strDefault As String) As String
         Dim tStr As String
-        Dim x1 As System.Collections.Generic.IEnumerable(Of LanguageString)
-
+        
         Dim Assembly = "*EmberAPP"
         htStrings = htArrayStrings.FirstOrDefault(Function(x) x.AssenblyName = Assembly).htStrings
         If IsNothing(htStrings) Then
             tStr = strDefault
         Else
-            x1 = From x As LanguageString In htStrings.string Where (x.id = ID)
-            If x1.Count = 0 Then
+            tStr = Nothing
+            For Each x As LanguageString In htStrings.string
+                If x.id = ID Then
+                    tStr = x.Value
+                    Exit For
+                End If
+            Next x
+
+            If IsNothing(tStr) Then
                 logger.Error(New StackFrame().GetMethod().Name, String.Format("Missing language_string: {0} - {1} : '{2}'", Assembly, ID, strDefault))
                 tStr = strDefault
-            Else
-                tStr = x1(0).Value
             End If
         End If
 
